@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Aura Read • Stream Deck</title>
+    
+    <!-- UI & Reading Fonts -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&display=swap">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    </script>
+    
+    <style>
+        :root {
+            --bg-base: #0c0e14;
+            --bg-surface: #141721;
+            --bg-card: #1b1f2e;
+            --bg-card-hover: #22273a;
+            --border-color: #262c40;
+            --border-focus: #3b82f6;
+
+            --text-main: #f1f5f9;
+            --text-muted: #64748b;
+            --text-dim: #94a3b8;
+
+            --accent-blue: #3b82f6;
+            --accent-cyan: #06b6d4;
+            --accent-amber: #f59e0b;
+            --accent-red: #ef4444;
+
+            --font-size: 19px;
+            --reader-font-family: 'Lora', Georgia, serif;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 18px;
+        }
+
+        body.light-theme {
+            --bg-base: #f8fafc;
+            --bg-surface: #ffffff;
+            --bg-card: #f1f5f9;
+            --bg-card-hover: #e2e8f0;
+            --border-color: #cbd5e1;
+            --border-focus: #2563eb;
+
+            --text-main: #0f172a;
+            --text-muted: #94a3b8;
+            --text-dim: #334155;
+
+            --accent-blue: #2563eb;
+            --accent-cyan: #0891b2;
+            --accent-amber: #d97706;
+            --accent-red: #dc2626;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            height: 100%;
+            height: 100dvh;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: var(--bg-base);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            transition: background 0.25s, color 0.25s;
+        }
+
+        .app-shell {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 1. TOP CONTROL BAR */
+        .top-switch-bar {
+            background: var(--bg-surface);
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            border-bottom: 1px solid var(--border-color);
+            z-index: 30;
+            flex-shrink: 0;
+        }
+
+        .bar-left-cluster {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .file-upload-badge {
+            position: relative;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--accent-cyan);
+            font-size: 13px;
+            font-weight: 700;
+            padding: 6px 10px;
+            border-radius: var(--radius-sm);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: 0.2s;
+            max-width: 140px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex-shrink: 0;
+        }
+        .file-upload-badge input[type="file"] {
+            position: absolute;
+            left: 0; top: 0;
+            opacity: 0; width: 100%; height: 100%;
+            cursor: pointer;
+        }
+
+        .modern-select {
+            background: var(--bg-card);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 8px;
+            border-radius: var(--radius-sm);
+            outline: none;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .icon-action-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            height: 34px;
+            padding: 0 10px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: 0.2s;
+            flex-shrink: 0;
+        }
+        .icon-action-btn:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--border-focus);
+        }
+
+        .btn-play-hero {
+            background: linear-gradient(135deg, var(--accent-blue), #1d4ed8);
+            border: none;
+            color: #ffffff;
+            height: 36px;
+            padding: 0 16px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .btn-pause-hero {
+            background: linear-gradient(135deg, var(--accent-amber), #b45309);
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
+            display: none;
+        }
+        .btn-stop-hero {
+            background: linear-gradient(135deg, var(--accent-red), #991b1b);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+            display: none;
+        }
+
+        /* 2. READER SETTINGS SUB-BAR */
+        .reader-settings-deck {
+            background: var(--bg-surface);
+            padding: 6px 12px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        .font-size-container {
+            position: relative;
+            display: inline-block;
+        }
+        .font-size-popover {
+            position: absolute;
+            top: 40px;
+            left: 0;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            padding: 8px 10px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 50;
+        }
+        .font-size-popover.hidden {
+            display: none;
+        }
+        .font-size-val {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-main);
+            min-width: 40px;
+            text-align: center;
+        }
+
+        /* 3. TRACK & FILE INFO */
+        .track-info-strip {
+            padding: 4px 12px;
+            background: var(--bg-base);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+        .track-title-text {
+            font-weight: 700;
+            color: var(--text-main);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 80%;
+        }
+
+        /* 4. TEXT VIEWPORT */
+        .content-viewport {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: scroll;
+            -webkit-overflow-scrolling: touch;
+            padding: 20px 24px;
+            font-family: var(--reader-font-family);
+        }
+        .content-viewport::-webkit-scrollbar { width: 6px; }
+        .content-viewport::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        .paragraph {
+            margin-bottom: 1.4em;
+            line-height: 1.75;
+            font-size: var(--font-size);
+            padding: 10px 14px;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            color: var(--text-dim);
+            transition: 0.15s ease;
+            border-left: 3px solid transparent;
+        }
+        .paragraph:hover {
+            background: var(--bg-card);
+            color: var(--text-main);
+        }
+        .paragraph.active-text {
+            background: var(--bg-card);
+            color: #ffffff;
+            border-left: 3px solid var(--accent-cyan);
+        }
+        body.light-theme .paragraph.active-text {
+            color: #000000;
+            background: #e2e8f0;
+        }
+        .fb2-image {
+            max-width: 85%;
+            height: auto;
+            border-radius: var(--radius-md);
+            margin: 15px auto;
+            display: block;
+            border: 1px solid var(--border-color);
+        }
+
+        /* 5. BOTTOM SHELF */
+        .bottom-shelf {
+            background: var(--bg-surface);
+            padding: 6px 14px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            flex-shrink: 0;
+            z-index: 20;
+        }
+        .shelf-status-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            box-shadow: 0 0 8px var(--accent-cyan);
+        }
+        .progress-badge {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: 2px 7px;
+            border-radius: 6px;
+            color: var(--text-main);
+            font-weight: 700;
+        }
+
+        /* LOCK SCREEN OVERLAY */
+        .lock-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(12, 14, 20, 0.96);
+            backdrop-filter: blur(10px);
+            z-index: 99999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .lock-overlay.hidden { display: none; }
+        .unlock-pad {
+            width: 260px;
+            padding: 30px 20px;
+            border: 2px dashed var(--border-color);
+            border-radius: var(--radius-lg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            text-align: center;
+            color: var(--text-muted);
+            user-select: none;
+            -webkit-user-select: none;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+        .unlock-pad span:first-child {
+            font-size: 14px;
+            font-weight: 800;
+            color: var(--accent-amber);
+        }
+
+        audio { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="app-shell">
+
+    <!-- 1. TOP CONTROL BAR -->
+    <header class="top-switch-bar">
+        <div class="bar-left-cluster">
+            <div class="file-upload-badge" id="fileBtnWrap" title="Select book file">
+                <span>📁</span>
+                <span id="fileNameDisp">Choose File</span>
+                <input type="file" id="fb2File" accept=".fb2,.txt,.docx,.pdf,text/xml,text/plain,application/pdf">
+            </div>
+
+            <!-- Voice Selection: Grouped by language & engine -->
+            <select id="voiceSelect" class="modern-select">
+                <optgroup label="🇺🇸 English (Edge Cloud)">
+                    <option value="en-US-JennyNeural" selected>Edge: Jenny (US)</option>
+                    <option value="en-US-GuyNeural">Edge: Guy (US)</option>
+                    <option value="en-GB-SoniaNeural">Edge: Sonia (UK)</option>
+                </optgroup>
+                <optgroup label="🇺🇸 English (Piper Offline)">
+                    <option value="piper-en-lessac">Piper: Lessac (US)</option>
+                    <option value="piper-en-ryan">Piper: Ryan (US)</option>
+                </optgroup>
+                <optgroup label="🇷🇺 Russian (Edge Cloud)">
+                    <option value="ru-RU-SvetlanaNeural">Edge: Svetlana</option>
+                    <option value="ru-RU-DmitryNeural">Edge: Dmitry</option>
+                </optgroup>
+                <optgroup label="🇷🇺 Russian (Piper Offline)">
+                    <option value="piper-ru-irina">Piper: Irina</option>
+                    <option value="piper-ru-ruslan">Piper: Ruslan</option>
+                </optgroup>
+            </select>
+
+            <button class="icon-action-btn" id="btnTheme" title="Toggle Theme">🌓</button>
+            <button class="icon-action-btn" id="lockBtn" style="color:var(--accent-amber);" title="Lock Screen">🔒</button>
+        </div>
+
+        <div style="display:flex; gap:6px;">
+            <button class="btn-play-hero" id="playBtn">▶ READ</button>
+            <button class="btn-play-hero btn-pause-hero" id="pauseBtn">⏸ PAUSE</button>
+            <button class="btn-play-hero btn-stop-hero" id="stopBtn">⏹ STOP</button>
+        </div>
+    </header>
+
+    <!-- 2. SUB-BAR: FONT, SPEED & SIZE CONTROLS -->
+    <div class="reader-settings-deck">
+        <select id="fontSelect" class="modern-select" style="max-width: 170px;" title="Select font family">
+            <option value="'Lora', Georgia, serif">📖 Lora (Serif)</option>
+            <option value="Georgia, serif">📜 Georgia (Serif)</option>
+            <option value="'Times New Roman', Times, serif">🏛️ Times (Serif)</option>
+            <option value="'Plus Jakarta Sans', sans-serif">🔤 Modern (Sans-serif)</option>
+            <option value="'JetBrains Mono', monospace">💻 Mono (Monospace)</option>
+        </select>
+
+        <select id="speedSelect" class="modern-select" title="Speech speed">
+            <option value="0.75">⏩ 0.75x</option>
+            <option value="1.0" selected>⏩ 1.0x</option>
+            <option value="1.25">⏩ 1.25x</option>
+            <option value="1.5">⏩ 1.5x</option>
+            <option value="1.75">⏩ 1.75x</option>
+            <option value="2.0">⏩ 2.0x</option>
+        </select>
+
+        <div class="font-size-container">
+            <button class="icon-action-btn" id="fontSizeToggleBtn" title="Adjust font size">
+                Aa <span id="fontSizeBtnText" style="margin-left:4px; font-size:11px; opacity:0.8;">[19px]</span>
+            </button>
+            
+            <div class="font-size-popover hidden" id="fontSizePopover">
+                <button class="icon-action-btn" id="btnFontMinus" style="padding: 0 10px;">A-</button>
+                <span class="font-size-val" id="fontSizeDisp">19px</span>
+                <button class="icon-action-btn" id="btnFontPlus" style="padding: 0 10px;">A+</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. BOOK TITLE STRIP -->
+    <div class="track-info-strip">
+        <div class="track-title-text" id="deck-book-title">No file selected</div>
+        <span id="deck-format-info" style="font-family:'JetBrains Mono'; font-size:10px; color:var(--text-muted);">READY</span>
+    </div>
+
+    <!-- 4. MAIN READING AREA -->
+    <main class="content-viewport" id="readerBody">
+        <div style="text-align: center; margin-top: 60px; color: var(--text-muted); font-size: 14px; font-weight: 600;">
+            📥 Load an FB2, TXT, DOCX, or PDF file to begin reading...
+        </div>
+    </main>
+
+    <!-- 5. BOTTOM STATUS BAR -->
+    <footer class="bottom-shelf">
+        <div class="shelf-status-pill">
+            <span class="status-dot"></span>
+            <span id="statusInfo">Idle...</span>
+        </div>
+        <span class="progress-badge" id="progressInfo">0 / 0</span>
+    </footer>
+
+    <!-- LOCK SCREEN OVERLAY -->
+    <div class="lock-overlay hidden" id="lock-overlay">
+        <div class="unlock-pad" id="unlock-zone">
+            <span>🔒 SCREEN LOCKED</span>
+            <span style="font-size: 11px; font-family:'JetBrains Mono'; color: var(--text-muted);">[ HOLD 1 SEC TO UNLOCK ]</span>
+        </div>
+    </div>
+
+</div>
+
+<audio id="audioPlayer"></audio>
+
+<script>
+    const playBtn = document.getElementById('playBtn'), stopBtn = document.getElementById('stopBtn'), pauseBtn = document.getElementById('pauseBtn');
+    const readerBody = document.getElementById('readerBody'), voiceSelect = document.getElementById('voiceSelect');
+    const audioPlayer = document.getElementById('audioPlayer'), statusInfo = document.getElementById('statusInfo');
+    const progressInfo = document.getElementById('progressInfo'), fileNameDisp = document.getElementById('fileNameDisp');
+    const deckBookTitle = document.getElementById('deck-book-title'), deckFormatInfo = document.getElementById('deck-format-info');
+    
+    const fontSelect = document.getElementById('fontSelect');
+    const speedSelect = document.getElementById('speedSelect');
+    const fontSizeToggleBtn = document.getElementById('fontSizeToggleBtn');
+    const fontSizePopover = document.getElementById('fontSizePopover');
+    const fontSizeBtnText = document.getElementById('fontSizeBtnText');
+    const fontSizeDisp = document.getElementById('fontSizeDisp');
+
+    let allBlocks = []; 
+    let textParagraphs = []; 
+    let currentIndex = 0;
+    
+    let playlist = [], queue = [], isFetching = false, isPlaying = false, isPaused = false, bookKey = '';
+    let currentSessionId = 0; 
+    const MIN_BUFFER = 2;
+
+    // 1. Font Family Preference
+    const savedFont = localStorage.getItem('reader-font') || "'Lora', Georgia, serif";
+    fontSelect.value = savedFont;
+    document.documentElement.style.setProperty('--reader-font-family', savedFont);
+
+    fontSelect.addEventListener('change', () => {
+        const val = fontSelect.value;
+        document.documentElement.style.setProperty('--reader-font-family', val);
+        localStorage.setItem('reader-font', val);
+    });
+
+    // 2. Playback Speed Preference
+    let currentPlaybackRate = parseFloat(localStorage.getItem('reader-speed')) || 1.0;
+    speedSelect.value = currentPlaybackRate.toString();
+    audioPlayer.playbackRate = currentPlaybackRate;
+
+    speedSelect.addEventListener('change', () => {
+        currentPlaybackRate = parseFloat(speedSelect.value);
+        audioPlayer.playbackRate = currentPlaybackRate;
+        localStorage.setItem('reader-speed', currentPlaybackRate);
+    });
+
+    // 3. Font Size Controls
+    let currentFontSize = parseInt(localStorage.getItem('reader-font-size')) || 19;
+    function updateFontSize() {
+        document.documentElement.style.setProperty('--font-size', currentFontSize + 'px');
+        fontSizeBtnText.textContent = `[${currentFontSize}px]`;
+        fontSizeDisp.textContent = currentFontSize + 'px';
+        localStorage.setItem('reader-font-size', currentFontSize);
+    }
+    updateFontSize();
+
+    fontSizeToggleBtn.onclick = (e) => {
+        e.stopPropagation();
+        fontSizePopover.classList.toggle('hidden');
+    };
+
+    document.addEventListener('click', (e) => {
+        if (!fontSizePopover.contains(e.target) && e.target !== fontSizeToggleBtn) {
+            fontSizePopover.classList.add('hidden');
+        }
+    });
+
+    document.getElementById('btnFontMinus').onclick = (e) => {
+        e.stopPropagation();
+        currentFontSize = Math.max(12, currentFontSize - 2);
+        updateFontSize();
+    };
+    document.getElementById('btnFontPlus').onclick = (e) => {
+        e.stopPropagation();
+        currentFontSize = Math.min(36, currentFontSize + 2);
+        updateFontSize();
+    };
+
+    // 4. Color Theme Toggle
+    const btnTheme = document.getElementById('btnTheme');
+    if (localStorage.getItem('reader-theme') === 'light') {
+        document.body.classList.add('light-theme');
+    }
+    btnTheme.onclick = () => {
+        document.body.classList.toggle('light-theme');
+        localStorage.setItem('reader-theme', document.body.classList.contains('light-theme') ? 'light' : 'dark');
+    };
+
+    // 5. Scroll Observation
+    const observer = new IntersectionObserver((entries) => {
+        if (isPlaying) return; 
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const idx = parseInt(entry.target.id.replace('p-', ''));
+                if (idx !== currentIndex) {
+                    currentIndex = idx;
+                    updateProgress();
+                    saveDebounced(); 
+                }
+            }
+        });
+    }, { root: readerBody, rootMargin: '0px', threshold: 0.5 });
+
+    // 6. File Upload & Parsing Handler
+    document.getElementById('fb2File').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if(!file) return;
+
+        fileNameDisp.textContent = file.name;
+        fileNameDisp.parentElement.title = file.name;
+        deckBookTitle.textContent = file.name;
+        bookKey = file.name; 
+        const ext = file.name.split('.').pop().toLowerCase();
+        deckFormatInfo.textContent = `${ext.toUpperCase()} • READY`;
+
+        statusInfo.textContent = "Processing file...";
+        readerBody.innerHTML = '<div style="text-align: center; margin-top: 60px; color: var(--text-muted); font-size:14px;">Parsing document...</div>';
+
+        if (ext === 'fb2' || ext === 'xml') {
+            const reader = new FileReader();
+            reader.onload = (evt) => parseFB2(evt.target.result);
+            reader.readAsText(file);
+        } 
+        else if (ext === 'txt') {
+            const reader = new FileReader();
+            reader.onload = (evt) => parseTXT(evt.target.result);
+            reader.readAsText(file);
+        } 
+        else if (ext === 'docx') {
+            const reader = new FileReader();
+            reader.onload = (evt) => parseDOCX(evt.target.result);
+            reader.readAsArrayBuffer(file);
+        }
+        else if (ext === 'pdf') {
+            const reader = new FileReader();
+            reader.onload = (evt) => parsePDF(evt.target.result);
+            reader.readAsArrayBuffer(file);
+        }
+    });
+
+    async function parsePDF(arrayBuffer) {
+        try {
+            const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+            const pdf = await loadingTask.promise;
+            let fullText = "";
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                let rawPageText = textContent.items.map(item => item.str).join(" ");
+                rawPageText = rawPageText.replace(/\s+/g, ' ');
+                fullText += rawPageText + " ";
+            }
+            let formattedText = fullText.replace(/([.?!])\s+([A-Za-zА-Яа-яЁё])/g, "$1\n$2");
+            parseTXT(formattedText);
+        } catch (err) {
+            console.error(err);
+            statusInfo.textContent = "PDF reading error";
+        }
+    }
+
+    function parseFB2(xmlString) {
+        const xml = new DOMParser().parseFromString(xmlString, "text/xml");
+        const binaries = {};
+        const binaryTags = xml.getElementsByTagName('binary');
+        for(let i = 0; i < binaryTags.length; i++) {
+            const id = binaryTags[i].getAttribute('id');
+            const cType = binaryTags[i].getAttribute('content-type') || 'image/jpeg';
+            const base64Data = binaryTags[i].textContent.replace(/\s+/g, '');
+            binaries[id] = `data:${cType};base64,${base64Data}`;
+        }
+
+        allBlocks = []; textParagraphs = []; let pIndex = 0;
+        const getHref = (node) => {
+            for (let j = 0; j < node.attributes.length; j++) {
+                if (node.attributes[j].name.includes('href')) return node.attributes[j].value;
+            }
+            return null;
+        };
+
+        const coverpages = xml.getElementsByTagName('coverpage');
+        if (coverpages.length > 0) {
+            const coverImages = coverpages[0].getElementsByTagName('image');
+            for (let img of coverImages) {
+                const href = getHref(img);
+                if (href) {
+                    const id = href.replace(/^#/, '');
+                    if (binaries[id]) allBlocks.push({ type: 'image', src: binaries[id] });
+                }
+            }
+        }
+
+        const bodies = xml.getElementsByTagName('body');
+        for (let b = 0; b < bodies.length; b++) {
+            const walk = (node) => {
+                if (node.nodeType === 1) {
+                    const tagName = node.tagName.replace(/^.*:/, '').toLowerCase();
+                    if (['p', 'v', 'subtitle', 'text-author'].includes(tagName)) {
+                        const text = node.textContent.replace(/[*#]/g, '').trim();
+                        if (text.length > 2) {
+                            const block = { type: 'text', text: text, index: pIndex++ };
+                            allBlocks.push(block); textParagraphs.push(block);
+                        }
+                    } else if (tagName === 'image') {
+                        const href = getHref(node);
+                        if (href) {
+                            const id = href.replace(/^#/, '');
+                            if (binaries[id]) allBlocks.push({ type: 'image', src: binaries[id] });
+                        }
+                    } else {
+                        for (let i = 0; i < node.childNodes.length; i++) walk(node.childNodes[i]);
+                    }
+                }
+            };
+            walk(bodies[b]);
+        }
+        loadProgressAndRender();
+    }
+
+    function parseTXT(textString) {
+        allBlocks = []; textParagraphs = []; let pIndex = 0;
+        const lines = textString.split(/\r?\n/);
+        lines.forEach(line => {
+            const text = line.trim();
+            if (text.length > 2) {
+                const block = { type: 'text', text: text, index: pIndex++ };
+                allBlocks.push(block); textParagraphs.push(block);
+            }
+        });
+        loadProgressAndRender();
+    }
+
+    function parseDOCX(arrayBuffer) {
+        mammoth.convertToHtml({arrayBuffer: arrayBuffer})
+            .then(function(result) {
+                const htmlString = result.value; 
+                const doc = new DOMParser().parseFromString(htmlString, "text/html");
+                allBlocks = []; textParagraphs = []; let pIndex = 0;
+
+                const walk = (node) => {
+                    if (node.nodeType === 1) { 
+                        const tagName = node.tagName.toLowerCase();
+                        if (tagName === 'img') {
+                            const src = node.getAttribute('src');
+                            if (src) allBlocks.push({ type: 'image', src: src });
+                        } 
+                        else if (['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li'].includes(tagName)) {
+                            const text = node.textContent.trim();
+                            if (text.length > 2) {
+                                const block = { type: 'text', text: text, index: pIndex++ };
+                                allBlocks.push(block); textParagraphs.push(block);
+                            }
+                        } else {
+                            for (let i = 0; i < node.childNodes.length; i++) walk(node.childNodes[i]);
+                        }
+                    }
+                };
+                walk(doc.body);
+                loadProgressAndRender();
+            });
+    }
+
+    function loadProgressAndRender() {
+        fetch(`/load_progress?book_name=${encodeURIComponent(bookKey)}`)
+            .then(r => r.json())
+            .then(data => {
+                currentIndex = data.index || 0;
+                if (currentIndex >= textParagraphs.length) currentIndex = 0;
+                render();
+            }).catch(() => { currentIndex = 0; render(); });
+    }
+
+    function render() {
+        observer.disconnect(); readerBody.innerHTML = ''; statusInfo.textContent = "Ready to read";
+        allBlocks.forEach(block => {
+            if (block.type === 'text') {
+                const div = document.createElement('div');
+                div.className = 'paragraph'; div.id = 'p-' + block.index;
+                div.textContent = block.text;
+                div.onclick = () => { 
+                    currentIndex = block.index; 
+                    saveDebounced(); 
+                    
+                    if(isPlaying) {
+                        stop();
+                        setTimeout(() => { playBtn.click(); }, 100);
+                    } else {
+                        scrollToCurrent();
+                    }
+                };
+                readerBody.appendChild(div);
+            } else if (block.type === 'image') {
+                const img = document.createElement('img');
+                img.src = block.src; img.className = 'fb2-image';
+                readerBody.appendChild(img);
+            }
+        });
+        updateProgress();
+        setTimeout(scrollToCurrent, 100);
+    }
+
+    let saveTimeout;
+    function saveDebounced() {
+        updateProgress(); clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            fetch('/save_progress', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ book_name: bookKey, index: currentIndex })
+            }).catch(err => console.error("Progress save failed:", err));
+        }, 1000); 
+    }
+
+    function updateProgress() {
+        if (textParagraphs.length > 0) {
+            progressInfo.textContent = `${currentIndex + 1} / ${textParagraphs.length}`;
+        }
+    }
+
+    function scrollToCurrent() {
+        const el = document.getElementById('p-' + currentIndex);
+        if(el) {
+            document.querySelectorAll('.paragraph').forEach(p => p.classList.remove('active-text'));
+            el.classList.add('active-text');
+            observer.disconnect();
+
+            const targetScrollTop = el.offsetTop - readerBody.offsetTop - (readerBody.clientHeight / 2) + (el.clientHeight / 2);
+            readerBody.scrollTo({
+                top: Math.max(0, targetScrollTop),
+                behavior: 'smooth'
+            });
+
+            setTimeout(() => {
+                document.querySelectorAll('.paragraph').forEach(p => observer.observe(p));
+            }, 500);
+        }
+    }
+
+    function updateMediaSession(text) {
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: 'Aura Read',
+                artist: text.length > 40 ? text.substring(0, 40) + '...' : text,
+                album: bookKey || 'Audiobook'
+            });
+            
+            navigator.mediaSession.setActionHandler('play', () => { if(isPaused) playBtn.click(); });
+            navigator.mediaSession.setActionHandler('pause', () => { pauseBtn.click(); });
+            navigator.mediaSession.setActionHandler('stop', () => { stopBtn.click(); });
+            navigator.mediaSession.setActionHandler('nexttrack', () => { 
+                if(isPlaying) {
+                    stop();
+                    currentIndex = Math.min(currentIndex + 1, textParagraphs.length - 1);
+                    playBtn.click();
+                }
+            });
+        }
+    }
+
+    playBtn.onclick = () => {
+        if (isPaused) {
+            isPaused = false;
+            audioPlayer.play();
+            playBtn.style.display = 'none';
+            pauseBtn.style.display = 'flex';
+            statusInfo.textContent = "Playing...";
+            fetchNext(); 
+            return;
+        }
+
+        if(!textParagraphs.length) return;
+        currentSessionId++; 
+        isPlaying = true; 
+        isPaused = false;
+        playBtn.style.display = 'none'; 
+        pauseBtn.style.display = 'flex';
+        stopBtn.style.display = 'flex';
+        
+        queue = textParagraphs.slice(currentIndex); 
+        playlist = [];
+        statusInfo.textContent = "Buffering audio...";
+        fetchNext();
+    };
+
+    pauseBtn.onclick = () => {
+        isPaused = true;
+        audioPlayer.pause();
+        playBtn.style.display = 'flex';
+        pauseBtn.style.display = 'none';
+        statusInfo.textContent = "Paused";
+    };
+
+    stopBtn.onclick = stop;
+
+    function stop() {
+        currentSessionId++; 
+        isPlaying = false; 
+        isPaused = false; 
+        isFetching = false; 
+        queue = []; 
+        playlist = [];
+        audioPlayer.pause(); 
+        audioPlayer.src = ""; 
+        playBtn.style.display = 'flex'; 
+        pauseBtn.style.display = 'none';
+        stopBtn.style.display = 'none';
+        statusInfo.textContent = "Stopped";
+    }
+
+    function fetchNext() {
+        if(!isPlaying || isFetching || !queue.length || playlist.length >= 4 || isPaused) return;
+        
+        isFetching = true;
+        const item = queue.shift();
+        const fetchSessionId = currentSessionId; 
+        const fd = new FormData();
+        fd.append('text', item.text);
+        fd.append('voice', voiceSelect.value);
+
+        fetch('/synthesize', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(data => {
+                isFetching = false;
+                
+                if(!isPlaying || fetchSessionId !== currentSessionId) return; 
+
+                if(data.success) {
+                    playlist.push({ 
+                        url: data.audio_url, 
+                        index: item.index, 
+                        engine: data.engine,
+                        text: item.text 
+                    });
+                    if (audioPlayer.paused && (playlist.length >= MIN_BUFFER || queue.length === 0) && !isPaused) {
+                        playAudio();
+                    }
+                    fetchNext();
+                } else {
+                    console.error("Server error:", data.error);
+                    statusInfo.textContent = "Error: " + data.error;
+                    isFetching = false;
+                }
+            }).catch(() => { 
+                isFetching = false; 
+                statusInfo.textContent = "Network waiting...";
+            });
+    }
+
+    function playAudio() {
+        if(!isPlaying || !playlist.length || isPaused) return;
+        
+        const audioItem = playlist.shift();
+        currentIndex = audioItem.index;
+        saveDebounced();
+        scrollToCurrent();
+        updateMediaSession(audioItem.text);
+        
+        statusInfo.textContent = "Speaking...";
+        audioPlayer.src = audioItem.url + "?t=" + Date.now();
+        
+        audioPlayer.playbackRate = currentPlaybackRate;
+        audioPlayer.play().catch(e => console.error("Playback prevented:", e));
+    }
+
+    audioPlayer.onended = () => {
+        if(isPlaying && !isPaused) {
+            playAudio();
+            fetchNext();
+        }
+    };
+
+    // 7. Lock Screen Logic
+    const lockBtn = document.getElementById('lockBtn');
+    const lockOverlay = document.getElementById('lock-overlay');
+    const unlockZone = document.getElementById('unlock-zone');
+    let unlockTimeout;
+
+    lockBtn.addEventListener('click', () => {
+        lockOverlay.classList.remove('hidden');
+    });
+
+    function startUnlockTimer() {
+        unlockZone.style.borderColor = 'var(--accent-cyan)';
+        unlockZone.style.color = 'var(--accent-cyan)';
+        
+        unlockTimeout = setTimeout(() => {
+            lockOverlay.classList.add('hidden');
+            unlockZone.style.borderColor = 'var(--border-color)';
+            unlockZone.style.color = 'var(--text-muted)';
+        }, 1000);
+    }
+
+    function cancelUnlockTimer() {
+        clearTimeout(unlockTimeout);
+        unlockZone.style.borderColor = 'var(--border-color)';
+        unlockZone.style.color = 'var(--text-muted)';
+    }
+
+    unlockZone.addEventListener('touchstart', (e) => { 
+        e.preventDefault();
+        startUnlockTimer(); 
+    }, {passive: false});
+    
+    unlockZone.addEventListener('touchend', cancelUnlockTimer);
+    unlockZone.addEventListener('touchcancel', cancelUnlockTimer);
+    
+    unlockZone.addEventListener('mousedown', startUnlockTimer);
+    unlockZone.addEventListener('mouseup', cancelUnlockTimer);
+    unlockZone.addEventListener('mouseleave', cancelUnlockTimer);
+
+    lockOverlay.addEventListener('click', (e) => {
+        if (e.target === lockOverlay) {
+            e.stopPropagation();
+        }
+    });
+</script>
+</body>
+</html>
