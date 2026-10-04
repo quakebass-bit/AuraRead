@@ -1,0 +1,22 @@
+{
+  "name": "Aura Read",
+  "short_name": "AuraRead",
+  "description": "Aura Read Stream Deck TTS Reader",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0c0e14",
+  "theme_color": "#0c0e14",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

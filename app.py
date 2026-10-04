@@ -6,14 +6,15 @@ import uuid
 import shutil
 import asyncio
 import subprocess
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 import edge_tts
 
 app = Flask(__name__)
 
 # Base directories
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-AUDIO_DIR = os.path.join(BASE_DIR, 'static', 'audio')
+STATIC_DIR = os.path.join(BASE_DIR, 'static')
+AUDIO_DIR = os.path.join(STATIC_DIR, 'audio')
 MODELS_DIR = os.path.join(BASE_DIR, 'models')
 PROGRESS_FILE = os.path.join(BASE_DIR, 'progress.json')
 
@@ -26,12 +27,10 @@ def find_piper_executable():
     4. System PATH lookup
     5. Fallback default executable name
     """
-    # 1. Custom path from environment variable
     env_path = os.getenv("PIPER_CMD")
     if env_path:
         return env_path
     
-    # 2. Local project folder inside piper-web/piper/
     local_win = os.path.join(BASE_DIR, 'piper', 'piper.exe')
     local_linux = os.path.join(BASE_DIR, 'piper', 'piper')
     if os.name == 'nt' and os.path.exists(local_win):
@@ -39,17 +38,14 @@ def find_piper_executable():
     if os.path.exists(local_linux):
         return local_linux
 
-    # 3. Termux / proot-distro Ubuntu default path
     termux_path = "/root/piper/piper"
     if os.path.exists(termux_path):
         return termux_path
 
-    # 4. Search in system PATH
     system_piper = shutil.which("piper.exe") if os.name == 'nt' else shutil.which("piper")
     if system_piper:
         return system_piper
 
-    # 5. Fallback default
     return "piper.exe" if os.name == 'nt' else "piper"
 
 PIPER_CMD = find_piper_executable()
@@ -57,12 +53,10 @@ PIPER_CMD = find_piper_executable()
 os.makedirs(AUDIO_DIR, exist_ok=True)
 os.makedirs(MODELS_DIR, exist_ok=True)
 
-# Piper voice models mapping (matching filenames in models/ directory)
+# Piper voice models mapping
 MODELS = {
-    # English models
     'piper-en-lessac': 'en_US-lessac-medium.onnx',
     'piper-en-ryan': 'en_US-ryan-medium.onnx',
-    # Russian models
     'piper-ru-irina': 'ru_RU-irina-medium.onnx',
     'piper-ru-ruslan': 'ru_RU-ruslan-medium.onnx'
 }
@@ -95,6 +89,18 @@ def save_progress_data(data):
 def index():
     return render_template('index.html')
 
+# --- PWA Routes ---
+@app.route('/manifest.json')
+def serve_manifest():
+    return send_from_directory(STATIC_DIR, 'manifest.json', mimetype='application/manifest+json')
+
+@app.route('/sw.js')
+def serve_sw():
+    response = send_from_directory(STATIC_DIR, 'sw.js', mimetype='application/javascript')
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
+# --- App API Routes ---
 @app.route('/save_progress', methods=['POST'])
 def save_progress():
     data = request.json or {}
@@ -129,7 +135,6 @@ def synthesize():
     cleanup_old_audio()
 
     try:
-        # Offline Piper TTS synthesis
         if voice in MODELS:
             model_name = MODELS[voice]
             model_path = os.path.join(MODELS_DIR, model_name)
@@ -162,7 +167,6 @@ def synthesize():
                 
             return jsonify({'success': True, 'audio_url': f'/static/audio/{filename}', 'engine': 'piper'})
             
-        # Cloud Edge TTS synthesis
         else:
             filename = f"speech_{uuid.uuid4().hex[:8]}.mp3"
             filepath = os.path.join(AUDIO_DIR, filename)

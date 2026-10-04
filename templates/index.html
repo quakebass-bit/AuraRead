@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Aura Read • Stream Deck</title>
     
+    <!-- PWA Settings -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0c0e14">
+    
     <!-- UI & Reading Fonts -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&display=swap">
     
@@ -15,7 +22,7 @@
     </script>
     
     <style>
-        :root {
+        :root, body[data-theme="dark"] {
             --bg-base: #0c0e14;
             --bg-surface: #141721;
             --bg-card: #1b1f2e;
@@ -39,7 +46,7 @@
             --radius-lg: 18px;
         }
 
-        body.light-theme {
+        body[data-theme="light"] {
             --bg-base: #f8fafc;
             --bg-surface: #ffffff;
             --bg-card: #f1f5f9;
@@ -55,6 +62,42 @@
             --accent-cyan: #0891b2;
             --accent-amber: #d97706;
             --accent-red: #dc2626;
+        }
+
+        body[data-theme="sepia"] {
+            --bg-base: #f4ecd8;
+            --bg-surface: #ebdcb9;
+            --bg-card: #e4d3a8;
+            --bg-card-hover: #dbbe8f;
+            --border-color: #d1b88a;
+            --border-focus: #8b5a2b;
+
+            --text-main: #433422;
+            --text-muted: #7f6a52;
+            --text-dim: #5c4b37;
+
+            --accent-blue: #8b5a2b;
+            --accent-cyan: #7c4b1d;
+            --accent-amber: #b26a00;
+            --accent-red: #9e2a2b;
+        }
+
+        body[data-theme="oled"] {
+            --bg-base: #000000;
+            --bg-surface: #0a0a0a;
+            --bg-card: #121212;
+            --bg-card-hover: #1c1c1c;
+            --border-color: #262626;
+            --border-focus: #00e5ff;
+
+            --text-main: #ffffff;
+            --text-muted: #666666;
+            --text-dim: #a3a3a3;
+
+            --accent-blue: #2979ff;
+            --accent-cyan: #00e5ff;
+            --accent-amber: #ff9100;
+            --accent-red: #ff1744;
         }
 
         * {
@@ -127,7 +170,7 @@
             gap: 6px;
             cursor: pointer;
             transition: 0.2s;
-            max-width: 140px;
+            max-width: 130px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -299,12 +342,8 @@
         }
         .paragraph.active-text {
             background: var(--bg-card);
-            color: #ffffff;
+            color: var(--text-main);
             border-left: 3px solid var(--accent-cyan);
-        }
-        body.light-theme .paragraph.active-text {
-            color: #000000;
-            background: #e2e8f0;
         }
         .fb2-image {
             max-width: 85%;
@@ -401,7 +440,7 @@
                 <input type="file" id="fb2File" accept=".fb2,.txt,.docx,.pdf,text/xml,text/plain,application/pdf">
             </div>
 
-            <!-- Voice Selection: Grouped by language & engine -->
+            <!-- Voice Selection -->
             <select id="voiceSelect" class="modern-select">
                 <optgroup label="🇺🇸 English (Edge Cloud)">
                     <option value="en-US-JennyNeural" selected>Edge: Jenny (US)</option>
@@ -422,7 +461,14 @@
                 </optgroup>
             </select>
 
-            <button class="icon-action-btn" id="btnTheme" title="Toggle Theme">🌓</button>
+            <!-- Theme Picker -->
+            <select id="themeSelect" class="modern-select" title="Theme">
+                <option value="dark">🌙 Dark</option>
+                <option value="light">☀️ Light</option>
+                <option value="sepia">📜 Sepia</option>
+                <option value="oled">🖤 OLED</option>
+            </select>
+
             <button class="icon-action-btn" id="lockBtn" style="color:var(--accent-amber);" title="Lock Screen">🔒</button>
         </div>
 
@@ -512,6 +558,7 @@
     const fontSizePopover = document.getElementById('fontSizePopover');
     const fontSizeBtnText = document.getElementById('fontSizeBtnText');
     const fontSizeDisp = document.getElementById('fontSizeDisp');
+    const themeSelect = document.getElementById('themeSelect');
 
     let allBlocks = []; 
     let textParagraphs = []; 
@@ -575,15 +622,17 @@
         updateFontSize();
     };
 
-    // 4. Color Theme Toggle
-    const btnTheme = document.getElementById('btnTheme');
-    if (localStorage.getItem('reader-theme') === 'light') {
-        document.body.classList.add('light-theme');
+    // 4. Color Theme Selection
+    const savedTheme = localStorage.getItem('reader-theme') || 'dark';
+    document.body.setAttribute('data-theme', savedTheme);
+    if (themeSelect) {
+        themeSelect.value = savedTheme;
+        themeSelect.addEventListener('change', () => {
+            const theme = themeSelect.value;
+            document.body.setAttribute('data-theme', theme);
+            localStorage.setItem('reader-theme', theme);
+        });
     }
-    btnTheme.onclick = () => {
-        document.body.classList.toggle('light-theme');
-        localStorage.setItem('reader-theme', document.body.classList.contains('light-theme') ? 'light' : 'dark');
-    };
 
     // 5. Scroll Observation
     const observer = new IntersectionObserver((entries) => {
@@ -1011,6 +1060,14 @@
             e.stopPropagation();
         }
     });
+
+    // 8. Service Worker Registration
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                .catch(err => console.log('SW registration error:', err));
+        });
+    }
 </script>
 </body>
 </html>
