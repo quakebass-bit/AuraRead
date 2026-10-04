@@ -58,7 +58,7 @@ aura-read/
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/aura-read.git
+git clone https://github.com/quakebass-bit/aura-read.git
 cd aura-read
 
 ```
