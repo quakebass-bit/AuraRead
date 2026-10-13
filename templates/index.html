@@ -154,7 +154,10 @@
             gap: 6px;
             flex: 1;
             min-width: 0;
+            overflow-x: auto;
+            scrollbar-width: none;
         }
+        .bar-left-cluster::-webkit-scrollbar { display: none; }
 
         .file-upload-badge {
             position: relative;
@@ -219,12 +222,19 @@
             border-color: var(--border-focus);
         }
 
+        .playback-controls-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
         .btn-play-hero {
             background: linear-gradient(135deg, var(--accent-blue), #1d4ed8);
             border: none;
             color: #ffffff;
             height: 36px;
-            padding: 0 16px;
+            padding: 0 14px;
             border-radius: var(--radius-sm);
             font-size: 13px;
             font-weight: 800;
@@ -307,7 +317,7 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 80%;
+            max-width: 70%;
         }
 
         /* 4. TEXT VIEWPORT */
@@ -381,6 +391,14 @@
             background: var(--accent-cyan);
             box-shadow: 0 0 8px var(--accent-cyan);
         }
+        .prefetch-pill {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: var(--accent-cyan);
+            font-size: 10px;
+        }
         .progress-badge {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
@@ -441,7 +459,7 @@
             </div>
 
             <!-- Voice Selection -->
-            <select id="voiceSelect" class="modern-select">
+            <select id="voiceSelect" class="modern-select" title="Voice">
                 <optgroup label="🇺🇸 English (Edge Cloud)">
                     <option value="en-US-JennyNeural" selected>Edge: Jenny (US)</option>
                     <option value="en-US-GuyNeural">Edge: Guy (US)</option>
@@ -461,27 +479,27 @@
                 </optgroup>
             </select>
 
-            <!-- Theme Picker -->
-            <select id="themeSelect" class="modern-select" title="Theme">
-                <option value="dark">🌙 Dark</option>
-                <option value="light">☀️ Light</option>
-                <option value="sepia">📜 Sepia</option>
-                <option value="oled">🖤 OLED</option>
-            </select>
-
             <button class="icon-action-btn" id="lockBtn" style="color:var(--accent-amber);" title="Lock Screen">🔒</button>
         </div>
 
-        <div style="display:flex; gap:6px;">
+        <!-- Кнопки управления воспроизведением -->
+        <div class="playback-controls-group">
             <button class="btn-play-hero" id="playBtn">▶ READ</button>
             <button class="btn-play-hero btn-pause-hero" id="pauseBtn">⏸ PAUSE</button>
             <button class="btn-play-hero btn-stop-hero" id="stopBtn">⏹ STOP</button>
         </div>
     </header>
 
-    <!-- 2. SUB-BAR: FONT, SPEED & SIZE CONTROLS -->
+    <!-- 2. SUB-BAR: FONT, SPEED, SIZE & THEME (ТЕМА ПЕРЕНЕСЕНА СЮДА) -->
     <div class="reader-settings-deck">
-        <select id="fontSelect" class="modern-select" style="max-width: 170px;" title="Select font family">
+        <select id="themeSelect" class="modern-select" title="Theme">
+            <option value="dark">🌙 Dark</option>
+            <option value="light">☀️ Light</option>
+            <option value="sepia">📜 Sepia</option>
+            <option value="oled">🖤 OLED</option>
+        </select>
+
+        <select id="fontSelect" class="modern-select" style="max-width: 150px;" title="Select font family">
             <option value="'Lora', Georgia, serif">📖 Lora (Serif)</option>
             <option value="Georgia, serif">📜 Georgia (Serif)</option>
             <option value="'Times New Roman', Times, serif">🏛️ Times (Serif)</option>
@@ -529,6 +547,7 @@
         <div class="shelf-status-pill">
             <span class="status-dot"></span>
             <span id="statusInfo">Idle...</span>
+            <span class="prefetch-pill" id="bufferInfo">buf: 0/2</span>
         </div>
         <span class="progress-badge" id="progressInfo">0 / 0</span>
     </footer>
@@ -549,6 +568,7 @@
     const playBtn = document.getElementById('playBtn'), stopBtn = document.getElementById('stopBtn'), pauseBtn = document.getElementById('pauseBtn');
     const readerBody = document.getElementById('readerBody'), voiceSelect = document.getElementById('voiceSelect');
     const audioPlayer = document.getElementById('audioPlayer'), statusInfo = document.getElementById('statusInfo');
+    const bufferInfo = document.getElementById('bufferInfo');
     const progressInfo = document.getElementById('progressInfo'), fileNameDisp = document.getElementById('fileNameDisp');
     const deckBookTitle = document.getElementById('deck-book-title'), deckFormatInfo = document.getElementById('deck-format-info');
     
@@ -562,11 +582,24 @@
 
     let allBlocks = []; 
     let textParagraphs = []; 
-    let currentIndex = 0;
+    let currentIndex = 0; // Индекс текущего абзаца
     
-    let playlist = [], queue = [], isFetching = false, isPlaying = false, isPaused = false, bookKey = '';
-    let currentSessionId = 0; 
-    const MIN_BUFFER = 2;
+    // Единицы чтения: плоский массив под-кусков (чанков)
+    let readingUnits = []; 
+    let currentUnitIndex = 0;
+
+    // Prefetch Очередь
+    let playlist = []; // [ { url, paragraphIndex, unitIndex, text } ]
+    let lastRequestedUnitIndex = -1; // Устранение бага повтора чанков
+
+    let isFetching = false;
+    let isPlaying = false;
+    let isPaused = false;
+    let bookKey = '';
+    let currentSessionId = 0;
+    
+    const PREFETCH_AHEAD = 2; // Ровно 2 готовых куска вперед
+    const MAX_PLAYLIST = 4;   // Максимум в буфере
 
     // 1. Font Family Preference
     const savedFont = localStorage.getItem('reader-font') || "'Lora', Georgia, serif";
@@ -642,6 +675,7 @@
                 const idx = parseInt(entry.target.id.replace('p-', ''));
                 if (idx !== currentIndex) {
                     currentIndex = idx;
+                    syncCurrentUnitFromParagraph();
                     updateProgress();
                     saveDebounced(); 
                 }
@@ -654,6 +688,7 @@
         const file = e.target.files[0];
         if(!file) return;
 
+        stop();
         fileNameDisp.textContent = file.name;
         fileNameDisp.parentElement.title = file.name;
         deckBookTitle.textContent = file.name;
@@ -761,7 +796,7 @@
             };
             walk(bodies[b]);
         }
-        loadProgressAndRender();
+        buildReadingUnitsServer().then(() => loadProgressAndRender());
     }
 
     function parseTXT(textString) {
@@ -774,7 +809,7 @@
                 allBlocks.push(block); textParagraphs.push(block);
             }
         });
-        loadProgressAndRender();
+        buildReadingUnitsServer().then(() => loadProgressAndRender());
     }
 
     function parseDOCX(arrayBuffer) {
@@ -803,8 +838,60 @@
                     }
                 };
                 walk(doc.body);
-                loadProgressAndRender();
+                buildReadingUnitsServer().then(() => loadProgressAndRender());
             });
+    }
+
+    // Разбиение через надежный серверный эндпоинт /api/split
+    async function buildReadingUnitsServer() {
+        readingUnits = [];
+        let unitCounter = 0;
+        statusInfo.textContent = "Splitting into sentences...";
+
+        try {
+            const rawParagraphs = textParagraphs.map(p => p.text);
+            const res = await fetch('/api/split', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paragraphs: rawParagraphs })
+            });
+            const data = await res.json();
+
+            if (data.results && data.results.length === textParagraphs.length) {
+                for (let i = 0; i < textParagraphs.length; i++) {
+                    const chunks = data.results[i];
+                    for (const ch of chunks) {
+                        readingUnits.push({
+                            unitIndex: unitCounter++,
+                            paragraphIndex: textParagraphs[i].index,
+                            text: ch
+                        });
+                    }
+                }
+            } else {
+                fallbackSplit(unitCounter);
+            }
+        } catch (e) {
+            console.warn("Server split failed, fallback to raw paragraphs:", e);
+            fallbackSplit(unitCounter);
+        }
+    }
+
+    function fallbackSplit(unitCounter) {
+        readingUnits = [];
+        for (const p of textParagraphs) {
+            readingUnits.push({
+                unitIndex: unitCounter++,
+                paragraphIndex: p.index,
+                text: p.text
+            });
+        }
+    }
+
+    function syncCurrentUnitFromParagraph() {
+        const found = readingUnits.findIndex(u => u.paragraphIndex === currentIndex);
+        currentUnitIndex = found !== -1 ? found : 0;
+        lastRequestedUnitIndex = currentUnitIndex - 1;
     }
 
     function loadProgressAndRender() {
@@ -813,8 +900,13 @@
             .then(data => {
                 currentIndex = data.index || 0;
                 if (currentIndex >= textParagraphs.length) currentIndex = 0;
+                syncCurrentUnitFromParagraph();
                 render();
-            }).catch(() => { currentIndex = 0; render(); });
+            }).catch(() => { 
+                currentIndex = 0; 
+                syncCurrentUnitFromParagraph();
+                render(); 
+            });
     }
 
     function render() {
@@ -826,11 +918,12 @@
                 div.textContent = block.text;
                 div.onclick = () => { 
                     currentIndex = block.index; 
+                    syncCurrentUnitFromParagraph();
                     saveDebounced(); 
                     
                     if(isPlaying) {
                         stop();
-                        setTimeout(() => { playBtn.click(); }, 100);
+                        setTimeout(() => { playBtn.click(); }, 120);
                     } else {
                         scrollToCurrent();
                     }
@@ -862,6 +955,7 @@
         if (textParagraphs.length > 0) {
             progressInfo.textContent = `${currentIndex + 1} / ${textParagraphs.length}`;
         }
+        bufferInfo.textContent = `buf: ${playlist.length}/${PREFETCH_AHEAD}`;
     }
 
     function scrollToCurrent() {
@@ -898,6 +992,7 @@
                 if(isPlaying) {
                     stop();
                     currentIndex = Math.min(currentIndex + 1, textParagraphs.length - 1);
+                    syncCurrentUnitFromParagraph();
                     playBtn.click();
                 }
             });
@@ -915,7 +1010,7 @@
             return;
         }
 
-        if(!textParagraphs.length) return;
+        if(!readingUnits.length) return;
         currentSessionId++; 
         isPlaying = true; 
         isPaused = false;
@@ -923,8 +1018,8 @@
         pauseBtn.style.display = 'flex';
         stopBtn.style.display = 'flex';
         
-        queue = textParagraphs.slice(currentIndex); 
         playlist = [];
+        syncCurrentUnitFromParagraph();
         statusInfo.textContent = "Buffering audio...";
         fetchNext();
     };
@@ -944,22 +1039,36 @@
         isPlaying = false; 
         isPaused = false; 
         isFetching = false; 
-        queue = []; 
         playlist = [];
+        lastRequestedUnitIndex = -1;
         audioPlayer.pause(); 
         audioPlayer.src = ""; 
         playBtn.style.display = 'flex'; 
         pauseBtn.style.display = 'none';
         stopBtn.style.display = 'none';
         statusInfo.textContent = "Stopped";
+        updateProgress();
     }
 
+    // Prefetch: последовательные запросы без удушения Termux и без повторов
     function fetchNext() {
-        if(!isPlaying || isFetching || !queue.length || playlist.length >= 4 || isPaused) return;
-        
+        if (!isPlaying || isFetching || isPaused) return;
+
+        // Вычисляем следующий целевой индекс через lastRequestedUnitIndex
+        const nextTargetUnitIndex = Math.max(lastRequestedUnitIndex + 1, currentUnitIndex);
+
+        if (nextTargetUnitIndex >= readingUnits.length) return;
+        if (playlist.length >= MAX_PLAYLIST) return;
+
+        // Держим ровно 2 чанка вперед во время воспроизведения
+        if (playlist.length >= PREFETCH_AHEAD && !audioPlayer.paused) return;
+
         isFetching = true;
-        const item = queue.shift();
-        const fetchSessionId = currentSessionId; 
+        lastRequestedUnitIndex = nextTargetUnitIndex; // Фиксируем запрос
+
+        const item = readingUnits[nextTargetUnitIndex];
+        const fetchSessionId = currentSessionId;
+
         const fd = new FormData();
         fd.append('text', item.text);
         fd.append('voice', voiceSelect.value);
@@ -968,51 +1077,75 @@
             .then(r => r.json())
             .then(data => {
                 isFetching = false;
-                
-                if(!isPlaying || fetchSessionId !== currentSessionId) return; 
+                if (!isPlaying || fetchSessionId !== currentSessionId) return;
 
-                if(data.success) {
+                if (data.success) {
                     playlist.push({ 
                         url: data.audio_url, 
-                        index: item.index, 
-                        engine: data.engine,
+                        paragraphIndex: item.paragraphIndex,
+                        unitIndex: item.unitIndex,
                         text: item.text 
                     });
-                    if (audioPlayer.paused && (playlist.length >= MIN_BUFFER || queue.length === 0) && !isPaused) {
+                    updateProgress();
+
+                    // Если плеер ждет первый чанк
+                    if (audioPlayer.paused && playlist.length >= 1 && !isPaused) {
                         playAudio();
                     }
+                    
+                    // Продолжаем наполнение до PREFETCH_AHEAD
                     fetchNext();
                 } else {
                     console.error("Server error:", data.error);
                     statusInfo.textContent = "Error: " + data.error;
-                    isFetching = false;
+                    lastRequestedUnitIndex--; // Откатываем при ошибке
                 }
             }).catch(() => { 
                 isFetching = false; 
+                lastRequestedUnitIndex--;
                 statusInfo.textContent = "Network waiting...";
             });
     }
 
     function playAudio() {
-        if(!isPlaying || !playlist.length || isPaused) return;
+        if (!isPlaying || !playlist.length || isPaused) return;
         
         const audioItem = playlist.shift();
-        currentIndex = audioItem.index;
-        saveDebounced();
-        scrollToCurrent();
+        currentUnitIndex = audioItem.unitIndex;
+        
+        // Синхронизация абзаца и скролла
+        if (currentIndex !== audioItem.paragraphIndex) {
+            currentIndex = audioItem.paragraphIndex;
+            saveDebounced();
+            scrollToCurrent();
+        }
+        
+        updateProgress();
         updateMediaSession(audioItem.text);
         
         statusInfo.textContent = "Speaking...";
-        audioPlayer.src = audioItem.url + "?t=" + Date.now();
-        
+        audioPlayer.src = audioItem.url;
         audioPlayer.playbackRate = currentPlaybackRate;
-        audioPlayer.play().catch(e => console.error("Playback prevented:", e));
+        
+        audioPlayer.play().catch(e => {
+            console.error("Playback prevented:", e);
+        });
+
+        // Запуск дозагрузки очереди
+        fetchNext();
     }
 
     audioPlayer.onended = () => {
-        if(isPlaying && !isPaused) {
-            playAudio();
-            fetchNext();
+        if (isPlaying && !isPaused) {
+            if (playlist.length > 0) {
+                playAudio();
+            } else if (lastRequestedUnitIndex + 1 < readingUnits.length) {
+                statusInfo.textContent = "Buffering next...";
+                fetchNext();
+            } else {
+                stop();
+                statusInfo.textContent = "Finished reading";
+            }
         }
     };
 
